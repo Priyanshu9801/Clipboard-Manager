@@ -38,6 +38,29 @@ function getCacheSnapshot() {
     };
 }
 
+ipcMain.handle("cache:get-snapshot", () => {
+    return getCacheSnapshot();
+});
+
+ipcMain.handle("cache:add", (_event, text: string) => {
+    cacheManager.put(text);
+    return getCacheSnapshot();
+});
+
+ipcMain.handle("cache:access", (_event, text: string) => {
+    cacheManager.get(text);
+    return getCacheSnapshot();
+});
+
+ipcMain.handle("cache:set-policy", (_event, policy: string) => {
+    if (policy !== "lru" && policy !== "lfu") {
+        throw new Error("Invalid eviction policy.");
+    }
+
+    cacheManager.activePolicy = policy;
+    return getCacheSnapshot();
+});
+
 let win: BrowserWindow | null
 
 function createWindow() {

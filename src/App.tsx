@@ -1,95 +1,121 @@
-// import { FormEvent, useState } from "react";
+import { FormEvent, useState, useEffect } from "react";
 // import CacheEntry from "./core/CacheEntry.ts";
 // import { CacheManager } from "./core/CacheManager.ts";
-// import "./App.css";
+import "./App.css";
 
-// function App() {
-//   const [manager] = useState(() => new CacheManager(10));
-//   const [text, setText] = useState("");
-//   const [entries, setEntries] = useState<CacheEntry[]>([]);
+interface CacheEntry {
+  text: string,
+  frequency: number,
+}
 
-//   function refreshEntries() {
-//       setEntries(manager.getEntries());
-//   }
+interface CacheSnapshot {
+  capacity: number,
+  activePolicy: "lru" | "lfu",
+  entries: CacheEntry[],
+}
 
-//   function handleAdd(event: FormEvent) {
-//       event.preventDefault();
+declare global {
+  interface Window {
+    cacheApi: {
+      getCacheSnapshot: () => Promise<CacheSnapshot>;
+      addText: (text: string) => Promise<CacheSnapshot>;
+      accessText: (text: string) => Promise<CacheSnapshot>;
+      setPolicy: (policy: 'lru' | 'lfu') => Promise<CacheSnapshot>;
+    };
+  }
+}
 
-//       const trimmedText = text.trim();
-//       if (trimmedText === "") return;
+function App() {
+  const [cacheSnapshot, setCacheSnapshot] = useState<CacheSnapshot | null>(null); 
+  const [text, setText] = useState("");
 
-//       manager.put(trimmedText);
-//       setText("");
-//       refreshEntries();
-//   }
+  useEffect(() => {
+    window.cacheApi.getCacheSnapshot().then((snapshot) => {
+      setCacheSnapshot(snapshot);
+    });
+  }, []);
 
-//   function handleAccess(text: string) {
-//       manager.get(text);
-//       refreshEntries();
-//   }
+  async function handleAdd(event: FormEvent) {
+    event.preventDefault();
+    if (text.trim() === "") return;
+    const newSnapshot = await window.cacheApi.addText(text);
+    setCacheSnapshot(newSnapshot);
+    setText("");
+  }
 
-//   function handlePolicyChange(policy: "lru" | "lfu") {
-//       manager.activePolicy = policy;
-//       refreshEntries();
-//   }
+  async function handleAccess(entryText: string) {
+    const newSnapshot = await window.cacheApi.accessText(entryText);
+    setCacheSnapshot(newSnapshot);
+  }
 
-//   return (
-//     <>
-//       <main className="app">
-//         <h1>Clipboard Manager</h1>
-//         <p>Manual cache testing — capacity: {manager.capacity}</p>
+  async function handlePolicyChange(policy: 'lru' | 'lfu') {
+    if(cacheSnapshot && cacheSnapshot.activePolicy === policy) return;
+    
+    const newSnapshot = await window.cacheApi.setPolicy(policy);
+    setCacheSnapshot(newSnapshot);
+  }
+  
+  if(!cacheSnapshot){
+    return (<h1>Loading....Please Wait</h1>);
+  }
 
-//         <section className="controls">
-//             <span>Eviction policy:</span>
+  return (
+    <>
+      <main className="app">
+        <h1>Clipboard Manager</h1>
+        <p>Capacity: {cacheSnapshot.capacity}</p>
 
-//             <button
-//                 className={manager.activePolicy === "lru" ? "selected" : ""}
-//                 onClick={() => handlePolicyChange("lru")}
-//             >
-//                 LRU
-//             </button>
+        <section className="controls">
+          <span>Eviction policy:</span>
 
-//             <button
-//                 className={manager.activePolicy === "lfu" ? "selected" : ""}
-//                 onClick={() => handlePolicyChange("lfu")}
-//             >
-//                 LFU
-//             </button>
-//         </section>
+          <button
+            className={cacheSnapshot.activePolicy === "lru" ? "selected" : ""}
+            onClick={() => handlePolicyChange("lru")}
+          >
+            LRU
+          </button>
 
-//         <form onSubmit={handleAdd} className="add-form">
-//             <input
-//                 value={text}
-//                 onChange={(event) => setText(event.target.value)}
-//                 placeholder="Enter text to simulate a clipboard copy"
-//             />
-//             <button type="submit">Add</button>
-//         </form>
+          <button
+            className={cacheSnapshot.activePolicy === "lfu" ? "selected" : ""}
+            onClick={() => handlePolicyChange("lfu")}
+          >
+            LFU
+          </button>
+        </section>
 
-//         <section className="history">
-//           <h2>Cached entries ({entries.length})</h2>
+        <form onSubmit={handleAdd} className="add-form">
+          <input
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            placeholder="Add text"
+          />
+          <button type="submit">Add</button>
+        </form>
 
-//           {entries.length === 0 ? (
-//               <p>No cached entries yet.</p>
-//           ) : (
-//               <ul className="entry-list">
-//                   {entries.map((entry) => (
-//                       <li key={entry.text}>
-//                           <button onClick={() => handleAccess(entry.text)}>
-//                               Use
-//                           </button>
+        <section className="history">
+          <h2>Cached entries ({cacheSnapshot.entries.length})</h2>
 
-//                           <code>{entry.text}</code>
+          {cacheSnapshot.entries.length === 0 ? (
+            <p>No cached entries yet.</p>
+          ) : (
+            <ul className="entry-list">
+              {cacheSnapshot.entries.map((entry) => (
+                <li key={entry.text}>
+                  <button onClick={() => handleAccess(entry.text)}>
+                    Use
+                  </button>
 
-//                           <span>Frequency: {entry.frequency}</span>
-//                       </li>
-//                   ))}
-//               </ul>
-//           )}
-//         </section>
-//       </main>
-//     </>
-//   )
-// }
+                  <code>{entry.text}</code>
 
-// export default App
+                  <span>Frequency: {entry.frequency}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </main>
+    </>
+  );
+}
+
+export default App

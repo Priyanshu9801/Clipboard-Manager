@@ -1,22 +1,8 @@
 "use strict";
 const electron = require("electron");
-electron.contextBridge.exposeInMainWorld("ipcRenderer", {
-  on(...args) {
-    const [channel, listener] = args;
-    return electron.ipcRenderer.on(channel, (event, ...args2) => listener(event, ...args2));
-  },
-  off(...args) {
-    const [channel, ...omit] = args;
-    return electron.ipcRenderer.off(channel, ...omit);
-  },
-  send(...args) {
-    const [channel, ...omit] = args;
-    return electron.ipcRenderer.send(channel, ...omit);
-  },
-  invoke(...args) {
-    const [channel, ...omit] = args;
-    return electron.ipcRenderer.invoke(channel, ...omit);
-  }
-  // You can expose other APTs you need here.
-  // ...
+electron.contextBridge.exposeInMainWorld("cacheApi", {
+  getCacheSnapshot: () => electron.ipcRenderer.invoke("cache:get-snapshot"),
+  addText: (text) => electron.ipcRenderer.invoke("cache:add", text),
+  accessText: (text) => electron.ipcRenderer.invoke("cache:access", text),
+  setPolicy: (policy) => electron.ipcRenderer.invoke("cache:set-policy", policy)
 });
