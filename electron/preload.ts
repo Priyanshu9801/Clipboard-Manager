@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('cacheApi', {
   setPolicy: (policy: 'lru' | 'lfu') => ipcRenderer.invoke('cache:set-policy', policy),
   deleteText: (text: string) => ipcRenderer.invoke('cache:delete', text),
   clearHistory: () => ipcRenderer.invoke('cache:clear-history'),
+  setCapacity: (newCapacity: number) => ipcRenderer.invoke('cache:set-capacity', newCapacity),
 
   onClipboardUpdated: (callback: (snapshot: CacheSnapshot) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, snapshot: CacheSnapshot) => {

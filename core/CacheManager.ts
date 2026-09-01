@@ -17,20 +17,9 @@ export default class CacheManager {
     lfuCache: LFUCache;
     activePolicy: ActivePolicy;
 
-    put(text: string){
-        if(text === "") return;
-
-        let nodesByPolicy = this.nodesByText.get(text);
-        if(nodesByPolicy) {this.get(text); return;} 
-
-        const cacheEntry = new CacheEntry(text);
-        nodesByPolicy = {
-            "lruNode": new DLLNode<CacheEntry>(cacheEntry),
-            "lfuNode": new DLLNode<CacheEntry>(cacheEntry),
-        }
-
-        if(this.nodesByText.size === this.capacity){
-            let removedEntry, removedNodes;
+    evictExcessEntries(): void {
+        while(this.nodesByText.size > this.capacity){
+            let removedEntry: CacheEntry | null, removedNodes: NodesByPolicy | undefined;
             if(this.activePolicy === "lru"){
                 removedEntry = this.lruCache.removeLruNode();
                 if(removedEntry){
@@ -48,10 +37,33 @@ export default class CacheManager {
 
             if(removedEntry) this.nodesByText.delete(removedEntry.text);
         }
+    }
+
+    setCapacity(newCapacity: number): void {
+        if (newCapacity < 0) {
+            throw new Error("Capacity must be a non-negative integer");
+        }
+        
+        this.capacity = newCapacity;
+        this.evictExcessEntries();
+    }
+
+    put(text: string){
+        if(text === "" || this.capacity===0) return;
+
+        let nodesByPolicy = this.nodesByText.get(text);
+        if(nodesByPolicy) {this.get(text); return;} 
+
+        const cacheEntry = new CacheEntry(text);
+        nodesByPolicy = {
+            "lruNode": new DLLNode<CacheEntry>(cacheEntry),
+            "lfuNode": new DLLNode<CacheEntry>(cacheEntry),
+        }
 
         this.lruCache.put(nodesByPolicy.lruNode);
         this.lfuCache.put(nodesByPolicy.lfuNode);
         this.nodesByText.set(text, nodesByPolicy);
+        this.evictExcessEntries();
     }
 
     get(text: string){
@@ -88,8 +100,8 @@ export default class CacheManager {
     }
 
     constructor(capacity: number) {
-        if (capacity <= 0) {
-            throw new Error("Capacity must be greater than 0");
+        if (capacity < 0) {
+            throw new Error("Capacity must be a non-negative integer");
         }
 
         this.capacity = capacity;

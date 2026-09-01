@@ -7,6 +7,7 @@ electron.contextBridge.exposeInMainWorld("cacheApi", {
   setPolicy: (policy) => electron.ipcRenderer.invoke("cache:set-policy", policy),
   deleteText: (text) => electron.ipcRenderer.invoke("cache:delete", text),
   clearHistory: () => electron.ipcRenderer.invoke("cache:clear-history"),
+  setCapacity: (newCapacity) => electron.ipcRenderer.invoke("cache:set-capacity", newCapacity),
   onClipboardUpdated: (callback) => {
     const listener = (_event, snapshot) => {
       callback(snapshot);

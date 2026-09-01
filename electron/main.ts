@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, clipboard } from 'electron'
+import { app, BrowserWindow, ipcMain, clipboard, Menu } from 'electron'
 // import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -72,21 +72,20 @@ ipcMain.handle("cache:clear-history", (_event) => {
     return getCacheSnapshot();
 });
 
+ipcMain.handle("cache:set-capacity", (_event, newCapacity: number) => {
+    cacheManager.setCapacity(newCapacity);
+    return getCacheSnapshot();
+});
+
 function startClipboardMonitor() {
   if (clipboardMonitor) return;
 
   clipboardMonitor = setInterval(() => {
     const currentText = clipboard.readText();
-    //console.log(clipboard.availableFormats()); //For debugging
 
     if (!currentText || currentText === lastClipboardText) {
       return;
     }
-
-    console.log(
-      JSON.stringify(currentText),
-      currentText.length
-    ); //For debugging
 
     lastClipboardText = currentText;
     cacheManager.put(currentText);
@@ -146,4 +145,7 @@ app.on('activate', () => {
   }
 })
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+    Menu.setApplicationMenu(null);
+    createWindow();
+});

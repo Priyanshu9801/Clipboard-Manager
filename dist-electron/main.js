@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
-import { clipboard, ipcMain, app, BrowserWindow } from "electron";
+import { clipboard, ipcMain, app, BrowserWindow, Menu } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 class CacheEntry {
@@ -218,8 +218,8 @@ class CacheManager {
     __publicField(this, "lruCache");
     __publicField(this, "lfuCache");
     __publicField(this, "activePolicy");
-    if (capacity <= 0) {
-      throw new Error("Capacity must be greater than 0");
+    if (capacity < 0) {
+      throw new Error("Capacity must be a non-negative integer");
     }
     this.capacity = capacity;
     this.nodesByText = /* @__PURE__ */ new Map();
@@ -227,19 +227,8 @@ class CacheManager {
     this.lfuCache = new LFUCache();
     this.activePolicy = "lru";
   }
-  put(text) {
-    if (text === "") return;
-    let nodesByPolicy = this.nodesByText.get(text);
-    if (nodesByPolicy) {
-      this.get(text);
-      return;
-    }
-    const cacheEntry = new CacheEntry(text);
-    nodesByPolicy = {
-      "lruNode": new DLLNode(cacheEntry),
-      "lfuNode": new DLLNode(cacheEntry)
-    };
-    if (this.nodesByText.size === this.capacity) {
+  evictExcessEntries() {
+    while (this.nodesByText.size > this.capacity) {
       let removedEntry, removedNodes;
       if (this.activePolicy === "lru") {
         removedEntry = this.lruCache.removeLruNode();
@@ -256,9 +245,30 @@ class CacheManager {
       }
       if (removedEntry) this.nodesByText.delete(removedEntry.text);
     }
+  }
+  setCapacity(newCapacity) {
+    if (newCapacity < 0) {
+      throw new Error("Capacity must be a non-negative integer");
+    }
+    this.capacity = newCapacity;
+    this.evictExcessEntries();
+  }
+  put(text) {
+    if (text === "" || this.capacity == 0) return;
+    let nodesByPolicy = this.nodesByText.get(text);
+    if (nodesByPolicy) {
+      this.get(text);
+      return;
+    }
+    const cacheEntry = new CacheEntry(text);
+    nodesByPolicy = {
+      "lruNode": new DLLNode(cacheEntry),
+      "lfuNode": new DLLNode(cacheEntry)
+    };
     this.lruCache.put(nodesByPolicy.lruNode);
     this.lfuCache.put(nodesByPolicy.lfuNode);
     this.nodesByText.set(text, nodesByPolicy);
+    this.evictExcessEntries();
   }
   get(text) {
     const nodesByPolicy = this.nodesByText.get(text);
@@ -331,6 +341,10 @@ ipcMain.handle("cache:clear-history", (_event) => {
   cacheManager.clear();
   return getCacheSnapshot();
 });
+ipcMain.handle("cache:set-capacity", (_event, newCapacity) => {
+  cacheManager.setCapacity(newCapacity);
+  return getCacheSnapshot();
+});
 function startClipboardMonitor() {
   if (clipboardMonitor) return;
   clipboardMonitor = setInterval(() => {
@@ -383,7 +397,10 @@ app.on("activate", () => {
     createWindow();
   }
 });
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
+  createWindow();
+});
 export {
   MAIN_DIST,
   RENDERER_DIST,

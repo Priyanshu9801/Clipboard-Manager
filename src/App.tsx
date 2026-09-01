@@ -11,18 +11,23 @@ declare global {
       setPolicy: (policy: 'lru' | 'lfu') => Promise<CacheSnapshot>;
       deleteText: (text: string) => Promise<CacheSnapshot>;
       clearHistory: () => Promise<CacheSnapshot>;
+      setCapacity: (newCapacity: number) => Promise<CacheSnapshot>;
       onClipboardUpdated: (callback: (snapshot: CacheSnapshot) => void) => () => void;
     };
   }
 }
 
+const CAPACITY_OPTIONS = [0, 1, 5, 10, 50, 100, 500, 1000];
+
 function App() {
   const [cacheSnapshot, setCacheSnapshot] = useState<CacheSnapshot | null>(null); 
+  const [selectedCapacity, setSelectedCapacity] = useState<number>(0);
   const [text, setText] = useState("");
 
   useEffect(() => {
     window.cacheApi.getCacheSnapshot().then((snapshot) => {
       setCacheSnapshot(snapshot);
+      setSelectedCapacity(snapshot.capacity);
     });
   }, []);
 
@@ -63,6 +68,13 @@ function App() {
     setCacheSnapshot(newSnapshot);
   }
 
+  async function handleSetCapacity(){
+    if(cacheSnapshot && selectedCapacity === cacheSnapshot.capacity) return;
+
+    const newSnapshot = await window.cacheApi.setCapacity(selectedCapacity);
+    setCacheSnapshot(newSnapshot);
+  }
+
   if(!cacheSnapshot){
     return (<h1>Loading....Please Wait</h1>);
   }
@@ -89,6 +101,22 @@ function App() {
           >
             LFU
           </button>
+
+          <div>
+            <label htmlFor="capacity-dropdown">Cache Capacity: </label>
+            <select 
+              id="capacity-dropdown"
+              value={selectedCapacity} 
+              onChange={(e) => setSelectedCapacity(Number(e.target.value))}
+            >
+              {CAPACITY_OPTIONS.map(cap => (
+                <option key={cap} value={cap}>{cap}</option>
+              ))}
+            </select>
+            <button onClick={handleSetCapacity}>
+              Set Capacity
+            </button>
+          </div>
 
           <button onClick={handleClearHistory}>
             Clear History
