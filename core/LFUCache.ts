@@ -1,80 +1,157 @@
 import {DLLNode, DoublyLinkedList} from "./DoublyLinkedList.ts";
 import CacheEntry from "./CacheEntry.ts"
 
+class FreqList {
+  freq: number;
+  entries: DoublyLinkedList<CacheEntry>;
+  prev: FreqList | null;
+  next: FreqList | null;
+
+  constructor(freq: number) {
+    this.freq = freq;
+    this.entries = new DoublyLinkedList<CacheEntry>();
+    this.prev = null;
+    this.next = null;
+  }
+}
+
 export default class LFUCache {
-    frequencyMap: Map<number, DoublyLinkedList<CacheEntry>>;
-    minFreq: number;
-    
-    get(node: DLLNode<CacheEntry>){
-        if(!node.data) return;
-        this.removeNode(node, false);
+  // Sentinels:
+  // tail <-> least frequent ... most frequent <-> head
+  private head: FreqList;
+  private tail: FreqList;
 
-        ++node.data.frequency;
+  private frequencyMap: Map<number, FreqList> = new Map();
 
-        let newList = this.frequencyMap.get(node.data.frequency);
-        if(!newList){
-            newList = new DoublyLinkedList<CacheEntry>();
-            this.frequencyMap.set(node.data.frequency, newList);
-        }
-        newList.addToFront(node);
+  constructor() {
+    this.head = new FreqList(Infinity);
+    this.tail = new FreqList(0);
+
+    this.head.prev = this.tail;
+    this.tail.next = this.head;
+  }
+
+  put(node: DLLNode<CacheEntry>) {
+    if(!node.data) return;
+
+    let freqList = this.frequencyMap.get(1);
+
+    if (!freqList) {
+      freqList = new FreqList(1);
+      this.insertFrequencyList(freqList, this.tail);
+      this.frequencyMap.set(1, freqList);
     }
 
-    put(node: DLLNode<CacheEntry>){
-        let firstTimeList = this.frequencyMap.get(1);
-        if(!firstTimeList){
-            firstTimeList = new DoublyLinkedList<CacheEntry>();
-            this.frequencyMap.set(1, firstTimeList); 
-        }
-        
-        firstTimeList.addToFront(node);
-        this.minFreq=1;
+    freqList.entries.addToFront(node);
+  }
+
+  get(node: DLLNode<CacheEntry>) {
+    if (!node.data) return;
+
+    const currentFreq = node.data.frequency;
+    const currentFreqList = this.frequencyMap.get(currentFreq);
+
+    if (!currentFreqList) return;
+
+    currentFreqList.entries.remove(node);
+
+    node.data.frequency = currentFreq + 1;
+
+    let previousFreqList = currentFreqList;
+
+    if (currentFreqList.entries.isEmpty()) {
+      // Preserve prev BEFORE removing currentFreqList.
+      previousFreqList = currentFreqList.prev!;
+
+      this.removeFrequencyList(currentFreqList);
+      this.frequencyMap.delete(currentFreq);
     }
 
-    removeNode(node: DLLNode<CacheEntry>, permanent: boolean){
-        if(!node.data) return;
-        let list = this.frequencyMap.get(node.data.frequency);
+    let nextFreqList = this.frequencyMap.get(node.data.frequency);
 
-        if(list){
-            list.remove(node);
-        }
+    if (!nextFreqList) {
+      nextFreqList = new FreqList(node.data.frequency);
 
-        if(list?.isEmpty()){
-            this.frequencyMap.delete(node.data.frequency);
+      this.insertFrequencyList(nextFreqList, previousFreqList);
 
-            if((!permanent) && (node.data.frequency===this.minFreq)){
-                ++this.minFreq; 
-            }
-        }
+      this.frequencyMap.set(node.data.frequency, nextFreqList);
     }
 
-    removeLfuNode(): CacheEntry | null{
-        let list = this.frequencyMap.get(this.minFreq);
-        if(list){
-            const removedNode = list.removeLast();
-            if(list.isEmpty()) this.frequencyMap.delete(this.minFreq);
-            if(removedNode) return removedNode.data;
-        }
-        return null;
+    nextFreqList.entries.addToFront(node);
+  }
+
+  removeNode(node: DLLNode<CacheEntry>) {
+    if (!node.data) return;
+
+    const freq = node.data.frequency;
+    const freqList = this.frequencyMap.get(freq);
+
+    if (!freqList) return;
+
+    freqList.entries.remove(node);
+
+    if (freqList.entries.isEmpty()) {
+      this.removeFrequencyList(freqList);
+      this.frequencyMap.delete(freq);
+    }
+  }
+
+  removeLfuNode(): CacheEntry | null {
+    const leastFreqList = this.tail.next;
+
+    if (!leastFreqList || leastFreqList === this.head) {
+      return null;
     }
 
-    getEntries(): CacheEntry[] {
-        const entries: CacheEntry[] = [];
+    const removedNode = leastFreqList.entries.removeLast();
 
-        const frequencies = [...this.frequencyMap.keys()].sort((a, b) => b - a);
+    if (!removedNode) return null;
 
-        for (const frequency of frequencies) {
-            const list = this.frequencyMap.get(frequency);
-
-            if (list) {
-                entries.push(...list.toArray());
-            }
-        }
-
-        return entries;
+    if (leastFreqList.entries.isEmpty()) {
+      this.removeFrequencyList(leastFreqList);
+      this.frequencyMap.delete(leastFreqList.freq);
     }
 
-    constructor(){
-        this.frequencyMap = new Map<number, DoublyLinkedList<CacheEntry>>();
-        this.minFreq=1;
+    return removedNode.data;
+  }
+
+  clear(): void {
+    this.frequencyMap.clear();
+    this.head.prev = this.tail;
+    this.tail.next = this.head;
+  }
+
+  getEntries(): CacheEntry[] {
+    const entries: CacheEntry[] = [];
+
+    let current = this.head.prev;
+
+    while (current && current !== this.tail) {
+      entries.push(...current.entries.toArray());
+      current = current.prev;
     }
+
+    return entries;
+  }
+
+  private insertFrequencyList(newFreqList: FreqList, previousFreqList: FreqList) {
+    const nextFreqList = previousFreqList.next!;
+
+    newFreqList.prev = previousFreqList;
+    newFreqList.next = nextFreqList;
+
+    previousFreqList.next = newFreqList;
+    nextFreqList.prev = newFreqList;
+  }
+
+  private removeFrequencyList(freqList: FreqList) {
+    const previousFreqList = freqList.prev!;
+    const nextFreqList = freqList.next!;
+
+    previousFreqList.next = nextFreqList;
+    nextFreqList.prev = previousFreqList;
+
+    freqList.prev = null;
+    freqList.next = null;
+  }
 }

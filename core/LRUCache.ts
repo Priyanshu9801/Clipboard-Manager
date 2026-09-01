@@ -23,6 +23,11 @@ export default class LRUCache {
         else return null;
     }
 
+    clear(): void {
+        this.list.head.prev = this.list.tail;
+        this.list.tail.next = this.list.head;
+    }
+
     getEntries(): CacheEntry[] {
         return this.list.toArray();
     }

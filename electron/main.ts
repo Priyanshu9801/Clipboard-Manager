@@ -25,7 +25,7 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
-const cacheManager = new CacheManager(10);
+const cacheManager = new CacheManager(5);
 let lastClipboardText = clipboard.readText();
 let clipboardMonitor: NodeJS.Timeout | null = null;
 
@@ -62,12 +62,22 @@ ipcMain.handle("cache:set-policy", (_event, policy: string) => {
     return getCacheSnapshot();
 });
 
+ipcMain.handle("cache:delete", (_event, text: string) => {
+    cacheManager.delete(text);
+    return getCacheSnapshot();
+});
+
+ipcMain.handle("cache:clear-history", (_event) => {
+    cacheManager.clear();
+    return getCacheSnapshot();
+});
+
 function startClipboardMonitor() {
   if (clipboardMonitor) return;
 
   clipboardMonitor = setInterval(() => {
     const currentText = clipboard.readText();
-    console.log(clipboard.availableFormats()); //For debugging
+    //console.log(clipboard.availableFormats()); //For debugging
 
     if (!currentText || currentText === lastClipboardText) {
       return;

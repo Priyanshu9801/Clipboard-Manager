@@ -35,7 +35,7 @@ export default class CacheManager {
                 removedEntry = this.lruCache.removeLruNode();
                 if(removedEntry){
                     removedNodes = this.nodesByText.get(removedEntry.text);
-                    if(removedNodes) this.lfuCache.removeNode(removedNodes.lfuNode, true);
+                    if(removedNodes) this.lfuCache.removeNode(removedNodes.lfuNode);
                 }
             }
             else{
@@ -62,12 +62,29 @@ export default class CacheManager {
         }
     }
 
+    delete(text: string): boolean {
+        const nodesByPolicy = this.nodesByText.get(text);
+        if (!nodesByPolicy) return false;
+
+        this.lruCache.removeNode(nodesByPolicy.lruNode);
+        this.lfuCache.removeNode(nodesByPolicy.lfuNode);
+
+        this.nodesByText.delete(text);
+        return true;
+    }
+
     getEntries(): CacheEntry[] {
         if (this.activePolicy === "lru") {
             return this.lruCache.getEntries();
         }
 
         return this.lfuCache.getEntries();
+    }
+
+    clear(): void{
+        this.nodesByText.clear();
+        this.lruCache.clear();
+        this.lfuCache.clear();
     }
 
     constructor(capacity: number) {

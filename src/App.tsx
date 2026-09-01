@@ -9,6 +9,8 @@ declare global {
       addText: (text: string) => Promise<CacheSnapshot>;
       accessText: (text: string) => Promise<void>;
       setPolicy: (policy: 'lru' | 'lfu') => Promise<CacheSnapshot>;
+      deleteText: (text: string) => Promise<CacheSnapshot>;
+      clearHistory: () => Promise<CacheSnapshot>;
       onClipboardUpdated: (callback: (snapshot: CacheSnapshot) => void) => () => void;
     };
   }
@@ -51,6 +53,16 @@ function App() {
     setCacheSnapshot(newSnapshot);
   }
   
+  async function handleDelete(text: string){
+    const newSnapshot = await window.cacheApi.deleteText(text);
+    setCacheSnapshot(newSnapshot);
+  }
+
+  async function handleClearHistory(){
+    const newSnapshot = await window.cacheApi.clearHistory();
+    setCacheSnapshot(newSnapshot);
+  }
+
   if(!cacheSnapshot){
     return (<h1>Loading....Please Wait</h1>);
   }
@@ -77,6 +89,10 @@ function App() {
           >
             LFU
           </button>
+
+          <button onClick={handleClearHistory}>
+            Clear History
+          </button>
         </section>
 
         <form onSubmit={handleAdd} className="add-form">
@@ -99,6 +115,10 @@ function App() {
                 <li key={entry.text}>
                   <button onClick={() => handleAccess(entry.text)}>
                     Use
+                  </button>
+
+                  <button onClick={() => handleDelete(entry.text)}>
+                    Delete
                   </button>
 
                   <code>{entry.text}</code>

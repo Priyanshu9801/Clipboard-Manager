@@ -94,69 +94,121 @@ class LRUCache {
     if (removedNode) return removedNode.data;
     else return null;
   }
+  clear() {
+    this.list.head.prev = this.list.tail;
+    this.list.tail.next = this.list.head;
+  }
   getEntries() {
     return this.list.toArray();
   }
 }
+class FreqList {
+  constructor(freq) {
+    __publicField(this, "freq");
+    __publicField(this, "entries");
+    __publicField(this, "prev");
+    __publicField(this, "next");
+    this.freq = freq;
+    this.entries = new DoublyLinkedList();
+    this.prev = null;
+    this.next = null;
+  }
+}
 class LFUCache {
   constructor() {
-    __publicField(this, "frequencyMap");
-    __publicField(this, "minFreq");
-    this.frequencyMap = /* @__PURE__ */ new Map();
-    this.minFreq = 1;
+    // Sentinels:
+    // tail <-> least frequent ... most frequent <-> head
+    __publicField(this, "head");
+    __publicField(this, "tail");
+    __publicField(this, "frequencyMap", /* @__PURE__ */ new Map());
+    this.head = new FreqList(Infinity);
+    this.tail = new FreqList(0);
+    this.head.prev = this.tail;
+    this.tail.next = this.head;
+  }
+  put(node) {
+    if (!node.data) return;
+    let freqList = this.frequencyMap.get(1);
+    if (!freqList) {
+      freqList = new FreqList(1);
+      this.insertFrequencyList(freqList, this.tail);
+      this.frequencyMap.set(1, freqList);
+    }
+    freqList.entries.addToFront(node);
   }
   get(node) {
     if (!node.data) return;
-    this.removeNode(node, false);
-    ++node.data.frequency;
-    let newList = this.frequencyMap.get(node.data.frequency);
-    if (!newList) {
-      newList = new DoublyLinkedList();
-      this.frequencyMap.set(node.data.frequency, newList);
+    const currentFreq = node.data.frequency;
+    const currentFreqList = this.frequencyMap.get(currentFreq);
+    if (!currentFreqList) return;
+    currentFreqList.entries.remove(node);
+    node.data.frequency = currentFreq + 1;
+    let previousFreqList = currentFreqList;
+    if (currentFreqList.entries.isEmpty()) {
+      previousFreqList = currentFreqList.prev;
+      this.removeFrequencyList(currentFreqList);
+      this.frequencyMap.delete(currentFreq);
     }
-    newList.addToFront(node);
-  }
-  put(node) {
-    let firstTimeList = this.frequencyMap.get(1);
-    if (!firstTimeList) {
-      firstTimeList = new DoublyLinkedList();
-      this.frequencyMap.set(1, firstTimeList);
+    let nextFreqList = this.frequencyMap.get(node.data.frequency);
+    if (!nextFreqList) {
+      nextFreqList = new FreqList(node.data.frequency);
+      this.insertFrequencyList(nextFreqList, previousFreqList);
+      this.frequencyMap.set(node.data.frequency, nextFreqList);
     }
-    firstTimeList.addToFront(node);
-    this.minFreq = 1;
+    nextFreqList.entries.addToFront(node);
   }
-  removeNode(node, permanent) {
+  removeNode(node) {
     if (!node.data) return;
-    let list = this.frequencyMap.get(node.data.frequency);
-    if (list) {
-      list.remove(node);
-    }
-    if (list == null ? void 0 : list.isEmpty()) {
-      this.frequencyMap.delete(node.data.frequency);
-      if (!permanent && node.data.frequency === this.minFreq) {
-        ++this.minFreq;
-      }
+    const freq = node.data.frequency;
+    const freqList = this.frequencyMap.get(freq);
+    if (!freqList) return;
+    freqList.entries.remove(node);
+    if (freqList.entries.isEmpty()) {
+      this.removeFrequencyList(freqList);
+      this.frequencyMap.delete(freq);
     }
   }
   removeLfuNode() {
-    let list = this.frequencyMap.get(this.minFreq);
-    if (list) {
-      const removedNode = list.removeLast();
-      if (list.isEmpty()) this.frequencyMap.delete(this.minFreq);
-      if (removedNode) return removedNode.data;
+    const leastFreqList = this.tail.next;
+    if (!leastFreqList || leastFreqList === this.head) {
+      return null;
     }
-    return null;
+    const removedNode = leastFreqList.entries.removeLast();
+    if (!removedNode) return null;
+    if (leastFreqList.entries.isEmpty()) {
+      this.removeFrequencyList(leastFreqList);
+      this.frequencyMap.delete(leastFreqList.freq);
+    }
+    return removedNode.data;
+  }
+  clear() {
+    this.frequencyMap.clear();
+    this.head.prev = this.tail;
+    this.tail.next = this.head;
   }
   getEntries() {
     const entries = [];
-    const frequencies = [...this.frequencyMap.keys()].sort((a, b) => b - a);
-    for (const frequency of frequencies) {
-      const list = this.frequencyMap.get(frequency);
-      if (list) {
-        entries.push(...list.toArray());
-      }
+    let current = this.head.prev;
+    while (current && current !== this.tail) {
+      entries.push(...current.entries.toArray());
+      current = current.prev;
     }
     return entries;
+  }
+  insertFrequencyList(newFreqList, previousFreqList) {
+    const nextFreqList = previousFreqList.next;
+    newFreqList.prev = previousFreqList;
+    newFreqList.next = nextFreqList;
+    previousFreqList.next = newFreqList;
+    nextFreqList.prev = newFreqList;
+  }
+  removeFrequencyList(freqList) {
+    const previousFreqList = freqList.prev;
+    const nextFreqList = freqList.next;
+    previousFreqList.next = nextFreqList;
+    nextFreqList.prev = previousFreqList;
+    freqList.prev = null;
+    freqList.next = null;
   }
 }
 class CacheManager {
@@ -193,7 +245,7 @@ class CacheManager {
         removedEntry = this.lruCache.removeLruNode();
         if (removedEntry) {
           removedNodes = this.nodesByText.get(removedEntry.text);
-          if (removedNodes) this.lfuCache.removeNode(removedNodes.lfuNode, true);
+          if (removedNodes) this.lfuCache.removeNode(removedNodes.lfuNode);
         }
       } else {
         removedEntry = this.lfuCache.removeLfuNode();
@@ -215,11 +267,24 @@ class CacheManager {
       this.lfuCache.get(nodesByPolicy.lfuNode);
     }
   }
+  delete(text) {
+    const nodesByPolicy = this.nodesByText.get(text);
+    if (!nodesByPolicy) return false;
+    this.lruCache.removeNode(nodesByPolicy.lruNode);
+    this.lfuCache.removeNode(nodesByPolicy.lfuNode);
+    this.nodesByText.delete(text);
+    return true;
+  }
   getEntries() {
     if (this.activePolicy === "lru") {
       return this.lruCache.getEntries();
     }
     return this.lfuCache.getEntries();
+  }
+  clear() {
+    this.nodesByText.clear();
+    this.lruCache.clear();
+    this.lfuCache.clear();
   }
 }
 const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
@@ -228,7 +293,7 @@ const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
 const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
-const cacheManager = new CacheManager(10);
+const cacheManager = new CacheManager(5);
 let lastClipboardText = clipboard.readText();
 let clipboardMonitor = null;
 function getCacheSnapshot() {
@@ -258,11 +323,18 @@ ipcMain.handle("cache:set-policy", (_event, policy) => {
   cacheManager.activePolicy = policy;
   return getCacheSnapshot();
 });
+ipcMain.handle("cache:delete", (_event, text) => {
+  cacheManager.delete(text);
+  return getCacheSnapshot();
+});
+ipcMain.handle("cache:clear-history", (_event) => {
+  cacheManager.clear();
+  return getCacheSnapshot();
+});
 function startClipboardMonitor() {
   if (clipboardMonitor) return;
   clipboardMonitor = setInterval(() => {
     const currentText = clipboard.readText();
-    console.log(clipboard.availableFormats());
     if (!currentText || currentText === lastClipboardText) {
       return;
     }
