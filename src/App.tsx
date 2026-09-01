@@ -1,26 +1,15 @@
 import { FormEvent, useState, useEffect } from "react";
-// import CacheEntry from "./core/CacheEntry.ts";
-// import { CacheManager } from "./core/CacheManager.ts";
+import { CacheSnapshot } from "../shared/types";
 import "./App.css";
-
-interface CacheEntry {
-  text: string,
-  frequency: number,
-}
-
-interface CacheSnapshot {
-  capacity: number,
-  activePolicy: "lru" | "lfu",
-  entries: CacheEntry[],
-}
 
 declare global {
   interface Window {
     cacheApi: {
       getCacheSnapshot: () => Promise<CacheSnapshot>;
       addText: (text: string) => Promise<CacheSnapshot>;
-      accessText: (text: string) => Promise<CacheSnapshot>;
+      accessText: (text: string) => Promise<void>;
       setPolicy: (policy: 'lru' | 'lfu') => Promise<CacheSnapshot>;
+      onClipboardUpdated: (callback: (snapshot: CacheSnapshot) => void) => () => void;
     };
   }
 }
@@ -35,17 +24,24 @@ function App() {
     });
   }, []);
 
+  useEffect(() => {
+    const removeListener = window.cacheApi.onClipboardUpdated((snapshot: CacheSnapshot) => {
+      setCacheSnapshot(snapshot);
+    })
+
+    return removeListener;
+  }, [])
+
   async function handleAdd(event: FormEvent) {
     event.preventDefault();
-    if (text.trim() === "") return;
+    if (!text) return;
     const newSnapshot = await window.cacheApi.addText(text);
     setCacheSnapshot(newSnapshot);
     setText("");
   }
 
-  async function handleAccess(entryText: string) {
-    const newSnapshot = await window.cacheApi.accessText(entryText);
-    setCacheSnapshot(newSnapshot);
+  function handleAccess(entryText: string) {
+    window.cacheApi.accessText(entryText);
   }
 
   async function handlePolicyChange(policy: 'lru' | 'lfu') {

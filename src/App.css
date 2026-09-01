@@ -52,4 +52,5 @@ button {
 .entry-list code {
     flex: 1;
     overflow-wrap: anywhere;
+    white-space: pre-wrap;
 }

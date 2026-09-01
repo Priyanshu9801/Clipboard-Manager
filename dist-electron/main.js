@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
-import { ipcMain, app, BrowserWindow } from "electron";
+import { clipboard, ipcMain, app, BrowserWindow } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 class CacheEntry {
@@ -229,6 +229,8 @@ const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
 const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
 const cacheManager = new CacheManager(10);
+let lastClipboardText = clipboard.readText();
+let clipboardMonitor = null;
 function getCacheSnapshot() {
   return {
     capacity: cacheManager.capacity,
@@ -247,8 +249,7 @@ ipcMain.handle("cache:add", (_event, text) => {
   return getCacheSnapshot();
 });
 ipcMain.handle("cache:access", (_event, text) => {
-  cacheManager.get(text);
-  return getCacheSnapshot();
+  clipboard.writeText(text);
 });
 ipcMain.handle("cache:set-policy", (_event, policy) => {
   if (policy !== "lru" && policy !== "lfu") {
@@ -257,6 +258,25 @@ ipcMain.handle("cache:set-policy", (_event, policy) => {
   cacheManager.activePolicy = policy;
   return getCacheSnapshot();
 });
+function startClipboardMonitor() {
+  if (clipboardMonitor) return;
+  clipboardMonitor = setInterval(() => {
+    const currentText = clipboard.readText();
+    console.log(clipboard.availableFormats());
+    if (!currentText || currentText === lastClipboardText) {
+      return;
+    }
+    console.log(
+      JSON.stringify(currentText),
+      currentText.length
+    );
+    lastClipboardText = currentText;
+    cacheManager.put(currentText);
+    if (win) {
+      win.webContents.send("clipboard:updated", getCacheSnapshot());
+    }
+  }, 500);
+}
 let win;
 function createWindow() {
   win = new BrowserWindow({
@@ -265,6 +285,7 @@ function createWindow() {
       preload: path.join(__dirname$1, "preload.mjs")
     }
   });
+  startClipboardMonitor();
   win.webContents.on("did-finish-load", () => {
     win == null ? void 0 : win.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
   });
@@ -278,6 +299,11 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
     win = null;
+  }
+});
+app.on("before-quit", () => {
+  if (clipboardMonitor) {
+    clearInterval(clipboardMonitor);
   }
 });
 app.on("activate", () => {

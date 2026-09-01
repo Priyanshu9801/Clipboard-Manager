@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, clipboard } from 'electron'
 // import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -26,6 +26,8 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
 const cacheManager = new CacheManager(10);
+let lastClipboardText = clipboard.readText();
+let clipboardMonitor: NodeJS.Timeout | null = null;
 
 function getCacheSnapshot() {
     return {
@@ -48,8 +50,7 @@ ipcMain.handle("cache:add", (_event, text: string) => {
 });
 
 ipcMain.handle("cache:access", (_event, text: string) => {
-    cacheManager.get(text);
-    return getCacheSnapshot();
+    clipboard.writeText(text);
 });
 
 ipcMain.handle("cache:set-policy", (_event, policy: string) => {
@@ -61,6 +62,31 @@ ipcMain.handle("cache:set-policy", (_event, policy: string) => {
     return getCacheSnapshot();
 });
 
+function startClipboardMonitor() {
+  if (clipboardMonitor) return;
+
+  clipboardMonitor = setInterval(() => {
+    const currentText = clipboard.readText();
+    console.log(clipboard.availableFormats()); //For debugging
+
+    if (!currentText || currentText === lastClipboardText) {
+      return;
+    }
+
+    console.log(
+      JSON.stringify(currentText),
+      currentText.length
+    ); //For debugging
+
+    lastClipboardText = currentText;
+    cacheManager.put(currentText);
+
+    if (win) {
+      win.webContents.send("clipboard:updated", getCacheSnapshot());
+    }
+  }, 500);
+}
+
 let win: BrowserWindow | null
 
 function createWindow() {
@@ -70,6 +96,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.mjs'),
     },
   })
+
+  startClipboardMonitor();
 
   // Test active push message to Renderer-process.
   win.webContents.on('did-finish-load', () => {
@@ -91,6 +119,12 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
     win = null
+  }
+})
+
+app.on('before-quit', () => {
+  if (clipboardMonitor) {
+    clearInterval(clipboardMonitor);
   }
 })
 
