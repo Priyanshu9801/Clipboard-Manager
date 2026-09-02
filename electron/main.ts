@@ -44,11 +44,6 @@ ipcMain.handle("cache:get-snapshot", () => {
     return getCacheSnapshot();
 });
 
-ipcMain.handle("cache:add", (_event, text: string) => {
-    cacheManager.put(text);
-    return getCacheSnapshot();
-});
-
 ipcMain.handle("cache:access", (_event, text: string) => {
     clipboard.writeText(text);
 });
@@ -77,6 +72,10 @@ ipcMain.handle("cache:set-capacity", (_event, newCapacity: number) => {
     return getCacheSnapshot();
 });
 
+ipcMain.handle("cache:prefix-search", (_event, prefix: string) => {
+    return cacheManager.prefixSearch(prefix);
+});
+
 function startClipboardMonitor() {
   if (clipboardMonitor) return;
 
@@ -100,6 +99,12 @@ let win: BrowserWindow | null
 
 function createWindow() {
   win = new BrowserWindow({
+    width: 1100,
+    height: 750,
+    minWidth: 900,
+    minHeight: 650,
+    backgroundColor: "#090d16",
+
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),

@@ -211,6 +211,80 @@ class LFUCache {
     freqList.next = null;
   }
 }
+class TrieNode {
+  constructor(parent = null) {
+    __publicField(this, "children");
+    __publicField(this, "parent");
+    __publicField(this, "entryCount");
+    __publicField(this, "isEnd");
+    this.children = /* @__PURE__ */ new Map();
+    this.parent = parent;
+    this.entryCount = 0;
+    this.isEnd = false;
+  }
+}
+class Trie {
+  constructor() {
+    __publicField(this, "root");
+    this.root = new TrieNode();
+  }
+  insert(text) {
+    if (text === "") return;
+    let current = this.root;
+    for (const ch of text) {
+      let next = current.children.get(ch);
+      if (!next) {
+        next = new TrieNode(current);
+        current.children.set(ch, next);
+      }
+      current = next;
+      current.entryCount++;
+    }
+    current.isEnd = true;
+  }
+  prefixSearch(prefix) {
+    let current = this.root;
+    for (const ch of prefix) {
+      const next = current.children.get(ch);
+      if (!next) {
+        return [];
+      }
+      current = next;
+    }
+    const results = [];
+    const currentText = Array.from(prefix);
+    this.collectEntries(current, currentText, results);
+    return results;
+  }
+  collectEntries(node, currentText, results) {
+    if (node.isEnd) {
+      results.push(currentText.join(""));
+    }
+    for (const [ch, child] of node.children) {
+      currentText.push(ch);
+      this.collectEntries(child, currentText, results);
+      currentText.pop();
+    }
+  }
+  delete(text) {
+    if (text === "") return;
+    let current = this.root;
+    for (const ch of text) {
+      const next = current.children.get(ch);
+      if (!next) return;
+      current = next;
+      current.entryCount--;
+      if (current.entryCount === 0) {
+        current.parent.children.delete(ch);
+        return;
+      }
+    }
+    current.isEnd = false;
+  }
+  clear() {
+    this.root = new TrieNode();
+  }
+}
 class CacheManager {
   constructor(capacity) {
     __publicField(this, "capacity");
@@ -218,6 +292,7 @@ class CacheManager {
     __publicField(this, "lruCache");
     __publicField(this, "lfuCache");
     __publicField(this, "activePolicy");
+    __publicField(this, "trie");
     if (capacity < 0) {
       throw new Error("Capacity must be a non-negative integer");
     }
@@ -226,6 +301,7 @@ class CacheManager {
     this.lruCache = new LRUCache();
     this.lfuCache = new LFUCache();
     this.activePolicy = "lru";
+    this.trie = new Trie();
   }
   evictExcessEntries() {
     while (this.nodesByText.size > this.capacity) {
@@ -243,7 +319,10 @@ class CacheManager {
           if (removedNodes) this.lruCache.removeNode(removedNodes.lruNode);
         }
       }
-      if (removedEntry) this.nodesByText.delete(removedEntry.text);
+      if (removedEntry) {
+        this.nodesByText.delete(removedEntry.text);
+        this.trie.delete(removedEntry.text);
+      }
     }
   }
   setCapacity(newCapacity) {
@@ -254,7 +333,7 @@ class CacheManager {
     this.evictExcessEntries();
   }
   put(text) {
-    if (text === "" || this.capacity == 0) return;
+    if (text === "" || this.capacity === 0) return;
     let nodesByPolicy = this.nodesByText.get(text);
     if (nodesByPolicy) {
       this.get(text);
@@ -267,6 +346,7 @@ class CacheManager {
     };
     this.lruCache.put(nodesByPolicy.lruNode);
     this.lfuCache.put(nodesByPolicy.lfuNode);
+    this.trie.insert(text);
     this.nodesByText.set(text, nodesByPolicy);
     this.evictExcessEntries();
   }
@@ -282,6 +362,7 @@ class CacheManager {
     if (!nodesByPolicy) return false;
     this.lruCache.removeNode(nodesByPolicy.lruNode);
     this.lfuCache.removeNode(nodesByPolicy.lfuNode);
+    this.trie.delete(text);
     this.nodesByText.delete(text);
     return true;
   }
@@ -291,10 +372,14 @@ class CacheManager {
     }
     return this.lfuCache.getEntries();
   }
+  prefixSearch(prefix) {
+    return this.trie.prefixSearch(prefix);
+  }
   clear() {
     this.nodesByText.clear();
     this.lruCache.clear();
     this.lfuCache.clear();
+    this.trie.clear();
   }
 }
 const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
@@ -319,10 +404,6 @@ function getCacheSnapshot() {
 ipcMain.handle("cache:get-snapshot", () => {
   return getCacheSnapshot();
 });
-ipcMain.handle("cache:add", (_event, text) => {
-  cacheManager.put(text);
-  return getCacheSnapshot();
-});
 ipcMain.handle("cache:access", (_event, text) => {
   clipboard.writeText(text);
 });
@@ -345,6 +426,9 @@ ipcMain.handle("cache:set-capacity", (_event, newCapacity) => {
   cacheManager.setCapacity(newCapacity);
   return getCacheSnapshot();
 });
+ipcMain.handle("cache:prefix-search", (_event, prefix) => {
+  return cacheManager.prefixSearch(prefix);
+});
 function startClipboardMonitor() {
   if (clipboardMonitor) return;
   clipboardMonitor = setInterval(() => {
@@ -352,10 +436,6 @@ function startClipboardMonitor() {
     if (!currentText || currentText === lastClipboardText) {
       return;
     }
-    console.log(
-      JSON.stringify(currentText),
-      currentText.length
-    );
     lastClipboardText = currentText;
     cacheManager.put(currentText);
     if (win) {

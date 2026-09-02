@@ -2,6 +2,7 @@ import CacheEntry from "./CacheEntry.ts";
 import { DLLNode } from "./DoublyLinkedList.ts";
 import LRUCache from "./LRUCache.ts";
 import LFUCache from "./LFUCache.ts";
+import Trie from "./Trie.ts";
 
 type ActivePolicy = "lru" | "lfu";
 
@@ -16,6 +17,7 @@ export default class CacheManager {
     lruCache: LRUCache;
     lfuCache: LFUCache;
     activePolicy: ActivePolicy;
+    trie: Trie;
 
     evictExcessEntries(): void {
         while(this.nodesByText.size > this.capacity){
@@ -35,7 +37,10 @@ export default class CacheManager {
                 }
             }
 
-            if(removedEntry) this.nodesByText.delete(removedEntry.text);
+            if(removedEntry) {
+                this.nodesByText.delete(removedEntry.text);
+                this.trie.delete(removedEntry.text);
+            }
         }
     }
 
@@ -62,7 +67,9 @@ export default class CacheManager {
 
         this.lruCache.put(nodesByPolicy.lruNode);
         this.lfuCache.put(nodesByPolicy.lfuNode);
+        this.trie.insert(text);
         this.nodesByText.set(text, nodesByPolicy);
+        
         this.evictExcessEntries();
     }
 
@@ -80,8 +87,10 @@ export default class CacheManager {
 
         this.lruCache.removeNode(nodesByPolicy.lruNode);
         this.lfuCache.removeNode(nodesByPolicy.lfuNode);
+        this.trie.delete(text);
 
         this.nodesByText.delete(text);
+
         return true;
     }
 
@@ -93,10 +102,15 @@ export default class CacheManager {
         return this.lfuCache.getEntries();
     }
 
+    prefixSearch(prefix: string): string[] {
+        return this.trie.prefixSearch(prefix);
+    }
+
     clear(): void{
         this.nodesByText.clear();
         this.lruCache.clear();
         this.lfuCache.clear();
+        this.trie.clear();
     }
 
     constructor(capacity: number) {
@@ -109,5 +123,6 @@ export default class CacheManager {
         this.lruCache = new LRUCache();
         this.lfuCache = new LFUCache();
         this.activePolicy = "lru";
+        this.trie = new Trie();
     }
 }

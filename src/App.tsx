@@ -6,12 +6,12 @@ declare global {
   interface Window {
     cacheApi: {
       getCacheSnapshot: () => Promise<CacheSnapshot>;
-      addText: (text: string) => Promise<CacheSnapshot>;
       accessText: (text: string) => Promise<void>;
       setPolicy: (policy: 'lru' | 'lfu') => Promise<CacheSnapshot>;
       deleteText: (text: string) => Promise<CacheSnapshot>;
       clearHistory: () => Promise<CacheSnapshot>;
       setCapacity: (newCapacity: number) => Promise<CacheSnapshot>;
+      searchByPrefix: (prefix: string) => Promise<string[]>;
       onClipboardUpdated: (callback: (snapshot: CacheSnapshot) => void) => () => void;
     };
   }
@@ -22,7 +22,9 @@ const CAPACITY_OPTIONS = [0, 1, 5, 10, 50, 100, 500, 1000];
 function App() {
   const [cacheSnapshot, setCacheSnapshot] = useState<CacheSnapshot | null>(null); 
   const [selectedCapacity, setSelectedCapacity] = useState<number>(0);
-  const [text, setText] = useState("");
+  const [prefix, setPrefix] = useState("");
+  const [submittedPrefix, setSubmittedPrefix] = useState<string>("");
+  const [searchResults, setSearchResults] = useState<string[]>([]);
 
   useEffect(() => {
     window.cacheApi.getCacheSnapshot().then((snapshot) => {
@@ -39,16 +41,14 @@ function App() {
     return removeListener;
   }, [])
 
-  async function handleAdd(event: FormEvent) {
-    event.preventDefault();
-    if (!text) return;
-    const newSnapshot = await window.cacheApi.addText(text);
-    setCacheSnapshot(newSnapshot);
-    setText("");
+  function handleClearSearch() {
+    setSubmittedPrefix("");
+    setSearchResults([]);
   }
 
   function handleAccess(entryText: string) {
     window.cacheApi.accessText(entryText);
+    handleClearSearch();
   }
 
   async function handlePolicyChange(policy: 'lru' | 'lfu') {
@@ -56,16 +56,21 @@ function App() {
     
     const newSnapshot = await window.cacheApi.setPolicy(policy);
     setCacheSnapshot(newSnapshot);
+    handleClearSearch();
   }
   
   async function handleDelete(text: string){
     const newSnapshot = await window.cacheApi.deleteText(text);
     setCacheSnapshot(newSnapshot);
+    handleClearSearch();
   }
 
   async function handleClearHistory(){
+    if(!cacheSnapshot || cacheSnapshot.entries.length === 0) return;
+
     const newSnapshot = await window.cacheApi.clearHistory();
     setCacheSnapshot(newSnapshot);
+    handleClearSearch();
   }
 
   async function handleSetCapacity(){
@@ -73,6 +78,16 @@ function App() {
 
     const newSnapshot = await window.cacheApi.setCapacity(selectedCapacity);
     setCacheSnapshot(newSnapshot);
+    handleClearSearch();
+  }
+
+  async function handleSearch(event: FormEvent) {
+    event.preventDefault();
+    if(!prefix) return;
+
+    setSubmittedPrefix(prefix);
+    const results = await window.cacheApi.searchByPrefix(prefix);
+    setSearchResults(results);
   }
 
   if(!cacheSnapshot){
@@ -123,38 +138,86 @@ function App() {
           </button>
         </section>
 
-        <form onSubmit={handleAdd} className="add-form">
-          <input
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            placeholder="Add text"
-          />
-          <button type="submit">Add</button>
+        <form onSubmit={handleSearch} className="search-form">
+          <div className="search-input-wrapper">
+              <input
+                value={prefix}
+                onChange={(event) => setPrefix(event.target.value)}
+                placeholder="Search clipboard history"
+              />
+
+              {
+                (submittedPrefix || prefix) && (
+                  <button
+                    type="button"
+                    className="clear-search-button"
+                    onClick={() => {setPrefix(""); handleClearSearch();}}
+                    aria-label="Clear search"
+                    title="Clear search"
+                  >
+                    ×
+                  </button>
+                )
+              }
+            
+          </div>
+          <button type="submit">Search</button>
         </form>
 
         <section className="history">
-          <h2>Cached entries ({cacheSnapshot.entries.length})</h2>
+          {submittedPrefix === "" ? (
+            <>
+              {cacheSnapshot.entries.length === 0 ? (
+                <p>No cached entries yet.</p>
+              ) : (
+                <>
+                  <h2>{cacheSnapshot.entries.length} Cached entries:</h2>
 
-          {cacheSnapshot.entries.length === 0 ? (
-            <p>No cached entries yet.</p>
+                  <ul className="entry-list">
+                    {cacheSnapshot.entries.map((entry) => (
+                      <li key={entry.text}>
+                        <button onClick={() => handleAccess(entry.text)}>
+                          Use
+                        </button>
+
+                        <button onClick={() => handleDelete(entry.text)}>
+                          Delete
+                        </button>
+
+                        <code>{entry.text}</code>
+                        <span>Frequency: {entry.frequency}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </>
           ) : (
-            <ul className="entry-list">
-              {cacheSnapshot.entries.map((entry) => (
-                <li key={entry.text}>
-                  <button onClick={() => handleAccess(entry.text)}>
-                    Use
-                  </button>
+            <>
+              {searchResults.length === 0 ? (
+                <p>No matching entries found for {`'${submittedPrefix}'`}.</p>
+              ) : (
+                <>
+                  <h2>{searchResults.length} results for {`'${submittedPrefix}'`}:</h2>
 
-                  <button onClick={() => handleDelete(entry.text)}>
-                    Delete
-                  </button>
+                  <ul className="entry-list">
+                    {searchResults.map((entryText) => (
+                      <li key={entryText}>
+                        <button onClick={() => handleAccess(entryText)}>
+                          Use
+                        </button>
 
-                  <code>{entry.text}</code>
+                        <button onClick={() => handleDelete(entryText)}>
+                          Delete
+                        </button>
 
-                  <span>Frequency: {entry.frequency}</span>
-                </li>
-              ))}
-            </ul>
+                        <code>{entryText}</code>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </>
           )}
         </section>
       </main>
