@@ -101,11 +101,11 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1100,
     height: 750,
-    minWidth: 900,
-    minHeight: 650,
+    minWidth: 700,
+    minHeight: 500,
     backgroundColor: "#090d16",
 
-    icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
+    icon: path.join(process.env.VITE_PUBLIC, 'clipboardIcon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
     },

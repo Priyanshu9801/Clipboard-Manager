@@ -1,6 +1,7 @@
 import { FormEvent, useState, useEffect } from "react";
 import { CacheSnapshot } from "../shared/types";
 import "./App.css";
+import { Settings } from "lucide-react";
 
 declare global {
   interface Window {
@@ -18,6 +19,70 @@ declare global {
 }
 
 const CAPACITY_OPTIONS = [0, 1, 5, 10, 50, 100, 500, 1000];
+
+
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 5 5" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h16" />
+      <path d="M9 7V4h6v3" />
+      <path d="M7 7l1 13h8l1-13" />
+      <path d="M10 11v5" />
+      <path d="M14 11v5" />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="8" y="8" width="11" height="11" rx="2" />
+      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+    </svg>
+  );
+}
+
+function SearchClearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 7l10 10" />
+      <path d="M17 7 7 17" />
+    </svg>
+  );
+}
+
+function ClearHistoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 7h14" />
+      <path d="M9 7V4h6v3" />
+      <path d="M7 7l1 13h8l1-13" />
+      <path d="M10 11v5" />
+      <path d="M14 11v5" />
+    </svg>
+  );
+}
+
+// function SettingsIcon() {
+//   return (
+//     <svg viewBox="0 0 24 24" aria-hidden="true">
+//       <circle cx="12" cy="12" r="3" />
+//       <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-2.5V20a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H6v-2.5h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V5h2.5v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v2.5h-.2a1.7 1.7 0 0 0-1.6 1Z" />
+//     </svg>
+//   );
+// }
+
+
 
 function App() {
   const [cacheSnapshot, setCacheSnapshot] = useState<CacheSnapshot | null>(null); 
@@ -90,138 +155,280 @@ function App() {
     setSearchResults(results);
   }
 
-  if(!cacheSnapshot){
-    return (<h1>Loading....Please Wait</h1>);
+  if (!cacheSnapshot) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner" />
+        <span>Loading clipboard history...</span>
+      </div>
+    );
   }
 
+  const isSearching = submittedPrefix !== "";
+  const displayedEntries = isSearching
+    ? searchResults
+    : cacheSnapshot.entries.map((entry) => entry.text);
+
   return (
-    <>
-      <main className="app">
-        <h1>Clipboard Manager</h1>
-        <p>Capacity: {cacheSnapshot.capacity}</p>
-
-        <section className="controls">
-          <span>Eviction policy:</span>
-
-          <button
-            className={cacheSnapshot.activePolicy === "lru" ? "selected" : ""}
-            onClick={() => handlePolicyChange("lru")}
-          >
-            LRU
-          </button>
-
-          <button
-            className={cacheSnapshot.activePolicy === "lfu" ? "selected" : ""}
-            onClick={() => handlePolicyChange("lfu")}
-          >
-            LFU
-          </button>
+    <main className="app">
+      <header className="app-header">
+        <div className="brand">
+          <div className="brand-icon">
+            <CopyIcon />
+          </div>
 
           <div>
-            <label htmlFor="capacity-dropdown">Cache Capacity: </label>
-            <select 
-              id="capacity-dropdown"
-              value={selectedCapacity} 
-              onChange={(e) => setSelectedCapacity(Number(e.target.value))}
-            >
-              {CAPACITY_OPTIONS.map(cap => (
-                <option key={cap} value={cap}>{cap}</option>
-              ))}
-            </select>
-            <button onClick={handleSetCapacity}>
-              Set Capacity
-            </button>
+            <h1 className="app-title">
+              ClipBro
+              <span
+                className="info-badge"
+                aria-label="How it works"
+                title="The app continuously monitors your clipboard. An entry is added or accessed only when the clipboard changes to a new text. Copying text that's already on your clipboard won't make any difference."
+              >
+                How it works?
+              </span>
+            </h1>
+
+            {/* <h1>Clipboard Manager</h1>
+
+            <Info
+              className="info-icon"
+              aria-label="• The app adds an entry only when the clipboard changes to a different text, not when the same text is copied again. • The app saves clipboard changes only while it is running."
+            /> */}
+
+            <p>
+              Your clipboard history, organized intelligently.
+            </p>
           </div>
+        </div>
 
-          <button onClick={handleClearHistory}>
-            Clear History
-          </button>
-        </section>
+        <div className="capacity-badge">
+          <span className={`status-dot ${cacheSnapshot.capacity === 0 ? "paused" : ""}`} />
+          {cacheSnapshot.capacity === 0
+            ? "History paused"
+            : `${cacheSnapshot.entries.length} / ${cacheSnapshot.capacity}`}
+        </div>
+      </header>
 
+      <section className="toolbar">
         <form onSubmit={handleSearch} className="search-form">
           <div className="search-input-wrapper">
-              <input
-                value={prefix}
-                onChange={(event) => setPrefix(event.target.value)}
-                placeholder="Search clipboard history"
-              />
+            <SearchIcon />
 
-              {
-                (submittedPrefix || prefix) && (
-                  <button
-                    type="button"
-                    className="clear-search-button"
-                    onClick={() => {setPrefix(""); handleClearSearch();}}
-                    aria-label="Clear search"
-                    title="Clear search"
-                  >
-                    ×
-                  </button>
-                )
-              }
-            
+            <input
+              value={prefix}
+              onChange={(event) => setPrefix(event.target.value)}
+              placeholder="Search clipboard history..."
+              aria-label="Search clipboard history"
+            />
+
+            {(submittedPrefix || prefix) && (
+              <button
+                type="button"
+                className="clear-search-button"
+                onClick={() => {
+                  setPrefix("");
+                  handleClearSearch();
+                }}
+                aria-label="Clear search"
+                title="Clear search"
+              >
+                <SearchClearIcon />
+              </button>
+            )}
           </div>
-          <button type="submit">Search</button>
+
+          <button
+            type="submit"
+            className="search-button"
+            aria-label="Search"
+            title="Search"
+          >
+            <SearchIcon />
+          </button>
         </form>
+      </section>
 
-        <section className="history">
-          {submittedPrefix === "" ? (
+      <section className="settings-panel">
+        <div className="setting-group">
+          <div className="setting-label">
+            <span className="setting-icon">
+              <Settings />
+            </span>
+
+            <div>
+              <strong>Eviction policy</strong>
+              <span>Choose how older entries are removed.</span>
+            </div>
+          </div>
+
+          <div className="policy-toggle">
+            <button
+              className={
+                cacheSnapshot.activePolicy === "lru"
+                  ? "policy-button active"
+                  : "policy-button"
+              }
+              onClick={() => handlePolicyChange("lru")}
+              title="Least recently used items are removed first."
+            >
+              LRU
+            </button>
+
+            <button
+              className={
+                cacheSnapshot.activePolicy === "lfu"
+                  ? "policy-button active"
+                  : "policy-button"
+              }
+              onClick={() => handlePolicyChange("lfu")}
+              title="Least frequently used items are removed first."
+            >
+              LFU
+            </button>
+          </div>
+        </div>
+
+        <div className="setting-divider" />
+
+        <div className="setting-group">
+          <div className="setting-label">
+            <div>
+              <strong>Cache capacity</strong>
+              <span>
+                Maximum number of clipboard entries to retain.
+              </span>
+            </div>
+          </div>
+
+          <div className="capacity-control">
+            <select
+              value={selectedCapacity}
+              onChange={(event) =>
+                setSelectedCapacity(Number(event.target.value))
+              }
+              aria-label="Cache capacity"
+            >
+              {CAPACITY_OPTIONS.map((capacity) => (
+                <option key={capacity} value={capacity}>
+                  {capacity}
+                </option>
+              ))}
+            </select>
+
+            <button
+              className="icon-button apply-button"
+              onClick={handleSetCapacity}
+              aria-label="Apply capacity"
+              title="Apply capacity"
+            >
+              ✓
+            </button>
+          </div>
+        </div>
+
+        <button
+          className="clear-history-button"
+          onClick={handleClearHistory}
+          disabled={cacheSnapshot.entries.length === 0}
+          aria-label="Clear history"
+          title="Clear history"
+        >
+          <ClearHistoryIcon />
+          <span>Clear history</span>
+        </button>
+      </section>
+
+      <section className="history">
+        <div className="history-header">
+          {isSearching ? (
             <>
-              {cacheSnapshot.entries.length === 0 ? (
-                <p>No cached entries yet.</p>
-              ) : (
-                <>
-                  <h2>{cacheSnapshot.entries.length} Cached entries:</h2>
+              <div>
+                <h2>Search results</h2>
+                <p>
+                  Matching{" "}
+                  <span className="highlight">
+                    "{submittedPrefix}"
+                  </span>
+                </p>
+              </div>
 
-                  <ul className="entry-list">
-                    {cacheSnapshot.entries.map((entry) => (
-                      <li key={entry.text}>
-                        <button onClick={() => handleAccess(entry.text)}>
-                          Use
-                        </button>
-
-                        <button onClick={() => handleDelete(entry.text)}>
-                          Delete
-                        </button>
-
-                        <code>{entry.text}</code>
-                        <span>Frequency: {entry.frequency}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
+              <span className="result-count">
+                {searchResults.length}{" "}
+                {searchResults.length === 1 ? "result" : "results"}
+              </span>
             </>
           ) : (
             <>
-              {searchResults.length === 0 ? (
-                <p>No matching entries found for {`'${submittedPrefix}'`}.</p>
-              ) : (
-                <>
-                  <h2>{searchResults.length} results for {`'${submittedPrefix}'`}:</h2>
+              <div>
+                <h2>Clipboard history</h2>
+                <p>Your most recently used entries.</p>
+              </div>
 
-                  <ul className="entry-list">
-                    {searchResults.map((entryText) => (
-                      <li key={entryText}>
-                        <button onClick={() => handleAccess(entryText)}>
-                          Use
-                        </button>
-
-                        <button onClick={() => handleDelete(entryText)}>
-                          Delete
-                        </button>
-
-                        <code>{entryText}</code>
-                      </li>
-                    ))}
-                  </ul>
-                </>
+              {cacheSnapshot.entries.length > 0 && (
+                <span className="result-count">
+                  {cacheSnapshot.entries.length}{" "}
+                  {cacheSnapshot.entries.length === 1
+                    ? "entry"
+                    : "entries"}
+                </span>
               )}
             </>
           )}
-        </section>
-      </main>
-    </>
+        </div>
+
+        {displayedEntries.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">
+              {isSearching ? <SearchIcon /> : <CopyIcon />}
+            </div>
+
+            <h3>
+              {isSearching
+                ? "No matching entries"
+                : "No saved entries yet"}
+            </h3>
+
+            <p>
+              {isSearching
+                ? `Nothing starts with "${submittedPrefix}".`
+                : "Copy something to your clipboard and it will appear here."}
+            </p>
+          </div>
+        ) : (
+          <ul className="entry-list">
+            {displayedEntries.map((entryText) => (
+              <li className="entry-card" key={entryText}>
+                <div className="entry-content">
+                  <code>{entryText}</code>
+                </div>
+
+                <div className="entry-actions">
+                  <button
+                    className="entry-action use-action"
+                    onClick={() => handleAccess(entryText)}
+                    aria-label="Use clipboard entry"
+                    title="Copy to clipboard"
+                  >
+                    <CopyIcon />
+                    <span>Use</span>
+                  </button>
+
+                  <button
+                    className="entry-action delete-action"
+                    onClick={() => handleDelete(entryText)}
+                    aria-label="Delete clipboard entry"
+                    title="Delete entry"
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </main>
   );
 }
 
