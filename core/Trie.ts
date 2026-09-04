@@ -60,18 +60,32 @@ export default class Trie {
         return results;
     }
 
-    private collectEntries(node: TrieNode, currentText: string[], results: string[]): void {
-        if (node.isEnd) {
-            results.push(currentText.join(""));
+    private collectEntries(begin: TrieNode, currentText: string[], results: string[]): void {
+        interface StackEntry{
+            node: TrieNode,
+            iterator: MapIterator<[string, TrieNode]>,
         }
+        
+        const stack: StackEntry[] = [];
+        stack.push({node: begin, iterator: begin.children.entries()});
 
-        for (const [ch, child] of node.children) {
-            currentText.push(ch);
-
-            this.collectEntries(child, currentText, results);
-
-            currentText.pop();
+        while(stack.length>0){
+            const {node, iterator} = stack.at(-1)!;
+            const next = iterator.next();
+            
+            if(next.done){
+                if(node.isEnd) results.push(currentText.join(""));
+                currentText.pop();
+                stack.pop();
+                continue;
+            }
+            
+            const nextNode = next.value[1];
+            currentText.push(next.value[0]);
+            stack.push({node: nextNode, iterator: nextNode.children.entries()});
         }
+        
+        return;
     }
 
     delete(text: string): void {
